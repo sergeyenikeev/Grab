@@ -1,0 +1,91 @@
+Metadata-Version: 2.4
+Name: grab
+Version: 0.1.0
+Summary: РЎР±РѕСЂ Рё РЅРѕСЂРјР°Р»РёР·Р°С†РёСЏ РґР°РЅРЅС‹С… Рѕ РїРѕРєСѓРїРєР°С… РёР· РїРѕС‡С‚С‹ Рё РјР°СЂРєРµС‚РїР»РµР№СЃРѕРІ
+Author: Grab
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: typer<1.0,>=0.12.3
+Requires-Dist: rich<14.0,>=13.7.1
+Requires-Dist: python-dotenv<2.0,>=1.0.1
+Requires-Dist: requests<3.0,>=2.32.3
+Requires-Dist: beautifulsoup4<5.0,>=4.12.3
+Requires-Dist: python-dateutil<3.0,>=2.9.0
+Requires-Dist: pandas<3.0,>=2.2.2
+Requires-Dist: openpyxl<4.0,>=3.1.5
+Requires-Dist: python-json-logger<3.0,>=2.0.7
+Requires-Dist: google-api-python-client<3.0,>=2.170.0
+Requires-Dist: google-auth-httplib2<1.0,>=0.2.0
+Requires-Dist: google-auth-oauthlib<2.0,>=1.2.0
+Requires-Dist: tenacity<9.0,>=8.5.0
+Provides-Extra: dev
+Requires-Dist: pytest<9.0,>=8.2.0; extra == "dev"
+Requires-Dist: pytest-cov<6.0,>=5.0.0; extra == "dev"
+Requires-Dist: requests-mock<2.0,>=1.12.1; extra == "dev"
+Requires-Dist: ruff<1.0,>=0.8.0; extra == "dev"
+
+﻿# Grab
+
+Grab — CLI-проект на Python для Windows 11, который собирает историю покупок из почты (Gmail API + IMAP Mail.ru/Yandex), нормализует данные в SQLite, скачивает медиа и экспортирует в XLSX/CSV.
+
+## Технический план (MVP)
+См. `docs/technical_plan.md`.
+
+## Что уже реализовано (MVP)
+- `grab init`: инициализация структуры и БД SQLite (`D:\p\Grab\data\grab.sqlite3`).
+- `grab auth`: Gmail OAuth и проверка IMAP для Mail.ru/Yandex.
+- `grab sync`: синхронизация из email-источников, дедуп, upsert, сырые сообщения, логи.
+- `grab export`: экспорт в `xlsx` и/или `csv`.
+- `grab doctor`: проверка окружения и доступов.
+- `grab dedupe`: диагностика дублей.
+- `grab tests`: запуск `pytest`.
+- Парсинг шаблонов писем: Ozon / Wildberries / Яндекс Маркет + fallback.
+- Медиа: вложения писем + медиа-ссылки (если доступны), дедуп по `sha256`.
+
+## Быстрый старт (Windows 11)
+1. Установить Python 3.11+ и Git.
+2. Клонировать репозиторий:
+   - SSH: `git clone git@github.com:sergeyenikeev/Grab.git`
+   - Если SSH не настроен: `git clone https://github.com/sergeyenikeev/Grab.git`
+3. Перейти в папку проекта: `cd Grab`
+4. Создать и активировать виртуальное окружение:
+   - `python -m venv .venv`
+   - `.\.venv\Scripts\activate`
+5. Установить зависимости:
+   - `pip install -r requirements-dev.txt`
+   - или `pip install -e .[dev]`
+6. Создать `.env` на основе `.env.example` и заполнить логины/пароли/пути.
+7. Инициализировать проект:
+   - `grab init`
+8. Настроить доступы:
+   - `grab auth`
+9. Запустить первую синхронизацию:
+   - `grab sync --source email --since 2024-01-01 --media download`
+10. Экспортировать данные:
+   - `grab export --format xlsx,csv --out D:\p\Grab\exports`
+
+## Команды CLI
+- `grab init`
+- `grab auth [--gmail/--no-gmail] [--imap/--no-imap]`
+- `grab sync --source all|email|ozon|wb|wildberries|yamarket|megamarket|dns|auchan [--since DATE] [--media download|skip]`
+- `grab export --format xlsx,csv --out <path>`
+- `grab doctor`
+- `grab dedupe`
+- `grab tests`
+
+## Структура данных
+- SQLite: `D:\p\Grab\data\grab.sqlite3`
+- Медиа: `D:\p\Grab\data\media\<store>\<order_id_or_date>\<item_id>\...`
+- Логи: `D:\p\Grab\logs\grab-YYYY-MM-DD.log` и `.jsonl`
+
+## Безопасность
+- Секреты не коммитятся (`.env`, токены, `data/`, `logs/`, `exports/` в `.gitignore`).
+- Используйте app password для IMAP (Mail.ru/Yandex).
+- Gmail работает через официальный OAuth.
+
+## CI
+GitHub Actions: `ruff + pytest + coverage` (`.github/workflows/ci.yml`).
+
+## Ограничения текущего MVP
+- Прямые интеграции с API маркетплейсов пока не включены: источники `ozon/wb/yamarket/...` в MVP покрываются через email.
+- Сбор публичных отзывов подготовлен на уровне БД/сервиса; внешние сборщики добавляются на этапе расширения.
