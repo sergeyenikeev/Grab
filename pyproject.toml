@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grab"
+version = "0.1.0"
+description = "РЎР±РѕСЂ Рё РЅРѕСЂРјР°Р»РёР·Р°С†РёСЏ РґР°РЅРЅС‹С… Рѕ РїРѕРєСѓРїРєР°С… РёР· РїРѕС‡С‚С‹ Рё РјР°СЂРєРµС‚РїР»РµР№СЃРѕРІ"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Grab" }]
+dependencies = [
+  "typer>=0.12.3,<1.0",
+  "rich>=13.7.1,<14.0",
+  "python-dotenv>=1.0.1,<2.0",
+  "requests>=2.32.3,<3.0",
+  "beautifulsoup4>=4.12.3,<5.0",
+  "python-dateutil>=2.9.0,<3.0",
+  "pandas>=2.2.2,<3.0",
+  "openpyxl>=3.1.5,<4.0",
+  "python-json-logger>=2.0.7,<3.0",
+  "google-api-python-client>=2.170.0,<3.0",
+  "google-auth-httplib2>=0.2.0,<1.0",
+  "google-auth-oauthlib>=1.2.0,<2.0",
+  "tenacity>=8.5.0,<9.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0,<9.0",
+  "pytest-cov>=5.0.0,<6.0",
+  "requests-mock>=1.12.1,<2.0",
+  "ruff>=0.8.0,<1.0"
+]
+
+[project.scripts]
+grab = "grab.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4"]
+ignore = ["E501", "B008", "UP017"]
+
