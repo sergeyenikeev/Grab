@@ -24,7 +24,13 @@ class ImapEmailSource:
         parts: list[str] = []
         for chunk, encoding in decoded:
             if isinstance(chunk, bytes):
-                parts.append(chunk.decode(encoding or "utf-8", errors="replace"))
+                enc = encoding or "utf-8"
+                if enc.lower() == "unknown-8bit":
+                    enc = "utf-8"
+                try:
+                    parts.append(chunk.decode(enc, errors="replace"))
+                except LookupError:
+                    parts.append(chunk.decode("utf-8", errors="replace"))
             else:
                 parts.append(chunk)
         return "".join(parts)
@@ -35,7 +41,12 @@ class ImapEmailSource:
         if payload is None:
             return ""
         charset = part.get_content_charset() or "utf-8"
-        return payload.decode(charset, errors="replace")
+        if charset.lower() == "unknown-8bit":
+            charset = "utf-8"
+        try:
+            return payload.decode(charset, errors="replace")
+        except LookupError:
+            return payload.decode("utf-8", errors="replace")
 
     def _extract_message_content(self, message: Message) -> tuple[str, str, list[AttachmentData]]:
         text_body = ""

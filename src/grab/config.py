@@ -18,6 +18,9 @@ DEFAULT_EMAIL_KEYWORDS = [
     "dns",
     "ашан",
     "яндекс маркет",
+    "aliexpress",
+    "ali express",
+    "алиэкспресс",
 ]
 
 
@@ -45,6 +48,11 @@ class Settings:
     gmail_account: str | None
     email_keywords: list[str] = field(default_factory=lambda: DEFAULT_EMAIL_KEYWORDS.copy())
     imap_accounts: list[ImapAccountConfig] = field(default_factory=list)
+    email_max_messages: int = 200
+    imap_retry_attempts: int = 2
+    imap_retry_delay_sec: float = 2.0
+    media_timeout_sec: int = 30
+    media_retries: int = 2
 
     @classmethod
     def load(cls, base_dir: Path | None = None) -> Settings:
@@ -75,31 +83,28 @@ class Settings:
             email_keywords = DEFAULT_EMAIL_KEYWORDS.copy()
 
         imap_accounts = []
-        mailru_user = os.getenv("MAILRU_IMAP_USER")
-        mailru_pass = os.getenv("MAILRU_IMAP_PASSWORD")
-        if mailru_user and mailru_pass:
-            imap_accounts.append(
-                ImapAccountConfig(
-                    provider="mailru",
-                    host=os.getenv("MAILRU_IMAP_HOST", "imap.mail.ru"),
-                    port=int(os.getenv("MAILRU_IMAP_PORT", "993")),
-                    username=mailru_user,
-                    password=mailru_pass,
-                )
+        imap_accounts.extend(
+            cls._load_imap_provider_accounts(
+                env_prefix="MAILRU",
+                provider="mailru",
+                default_host="imap.mail.ru",
+                default_port=993,
             )
+        )
+        imap_accounts.extend(
+            cls._load_imap_provider_accounts(
+                env_prefix="YANDEX",
+                provider="yandex",
+                default_host="imap.yandex.ru",
+                default_port=993,
+            )
+        )
 
-        yandex_user = os.getenv("YANDEX_IMAP_USER")
-        yandex_pass = os.getenv("YANDEX_IMAP_PASSWORD")
-        if yandex_user and yandex_pass:
-            imap_accounts.append(
-                ImapAccountConfig(
-                    provider="yandex",
-                    host=os.getenv("YANDEX_IMAP_HOST", "imap.yandex.ru"),
-                    port=int(os.getenv("YANDEX_IMAP_PORT", "993")),
-                    username=yandex_user,
-                    password=yandex_pass,
-                )
-            )
+        email_max_messages = int(os.getenv("GRAB_EMAIL_MAX_MESSAGES", "200"))
+        imap_retry_attempts = int(os.getenv("GRAB_IMAP_RETRY_ATTEMPTS", "2"))
+        imap_retry_delay_sec = float(os.getenv("GRAB_IMAP_RETRY_DELAY_SEC", "2"))
+        media_timeout_sec = int(os.getenv("GRAB_MEDIA_TIMEOUT_SEC", "30"))
+        media_retries = int(os.getenv("GRAB_MEDIA_RETRIES", "2"))
 
         return cls(
             root_dir=root_dir,
@@ -114,7 +119,55 @@ class Settings:
             gmail_account=gmail_account,
             email_keywords=email_keywords,
             imap_accounts=imap_accounts,
+            email_max_messages=email_max_messages,
+            imap_retry_attempts=imap_retry_attempts,
+            imap_retry_delay_sec=imap_retry_delay_sec,
+            media_timeout_sec=media_timeout_sec,
+            media_retries=media_retries,
         )
+
+    @staticmethod
+    def _load_imap_provider_accounts(
+        *,
+        env_prefix: str,
+        provider: str,
+        default_host: str,
+        default_port: int,
+    ) -> list[ImapAccountConfig]:
+        """
+        Поддерживает несколько аккаунтов одного провайдера.
+        Формат ключей:
+        - базовый: PREFIX_IMAP_USER / PREFIX_IMAP_PASSWORD
+        - дополнительные: PREFIX_IMAP_USER_2 / PREFIX_IMAP_PASSWORD_2 и т.д.
+        """
+        accounts: list[ImapAccountConfig] = []
+        for index in range(1, 11):
+            suffix = "" if index == 1 else f"_{index}"
+            user = os.getenv(f"{env_prefix}_IMAP_USER{suffix}")
+            password = os.getenv(f"{env_prefix}_IMAP_PASSWORD{suffix}")
+            if not user or not password:
+                continue
+
+            host = os.getenv(
+                f"{env_prefix}_IMAP_HOST{suffix}",
+                os.getenv(f"{env_prefix}_IMAP_HOST", default_host),
+            )
+            port_raw = os.getenv(
+                f"{env_prefix}_IMAP_PORT{suffix}",
+                os.getenv(f"{env_prefix}_IMAP_PORT", str(default_port)),
+            )
+            mailbox = os.getenv(f"{env_prefix}_IMAP_MAILBOX{suffix}", "INBOX")
+            accounts.append(
+                ImapAccountConfig(
+                    provider=provider,
+                    host=host,
+                    port=int(port_raw),
+                    username=user,
+                    password=password,
+                    mailbox=mailbox,
+                )
+            )
+        return accounts
 
     def ensure_directories(self) -> None:
         for path in [self.root_dir, self.data_dir, self.media_dir, self.logs_dir, self.raw_dir, self.exports_dir]:

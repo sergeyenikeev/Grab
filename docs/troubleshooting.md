@@ -1,5 +1,10 @@
 ﻿# Troubleshooting
 
+## Полная настройка Gmail OAuth + IMAP
+- Подробная пошаговая инструкция: `docs/auth_setup.md`
+- Пример OAuth JSON: `secrets/gmail_client_secret.example.json`
+- Пример `.env`: `.env.example`
+
 ## Gmail OAuth: не открывается авторизация
 - Проверьте путь `GMAIL_OAUTH_CLIENT_SECRET_PATH` в `.env`.
 - Убедитесь, что в Google Cloud создан OAuth Client ID для Desktop App.

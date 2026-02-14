@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -27,6 +28,8 @@ SOURCE_FILTER_MAP = {
     "megamarket": "megamarket",
     "dns": "dns",
     "auchan": "auchan",
+    "aliexpress": "aliexpress",
+    "ali": "aliexpress",
 }
 
 
@@ -50,7 +53,7 @@ class SyncService:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.isoformat()
 
-    def _collect_email_messages(self, since: datetime | None = None) -> list[EmailMessageData]:
+    def _collect_email_messages(self, since: datetime | None, max_messages: int) -> list[EmailMessageData]:
         messages: list[EmailMessageData] = []
 
         gmail_configured = (
@@ -67,6 +70,7 @@ class SyncService:
                 gmail_messages = gmail_source.fetch_messages(
                     keywords=self.settings.email_keywords,
                     since=since,
+                    max_messages=max_messages,
                 )
                 messages.extend(gmail_messages)
                 self.logger.info("Gmail messages collected: %s", len(gmail_messages))
@@ -76,18 +80,34 @@ class SyncService:
             self.logger.info("Gmail source skipped: OAuth files are not configured")
 
         for account in self.settings.imap_accounts:
-            try:
-                source = ImapEmailSource(account)
-                imap_messages = source.fetch_messages(
-                    keywords=self.settings.email_keywords,
-                    since=since,
-                )
-                messages.extend(imap_messages)
-                self.logger.info(
-                    "IMAP messages collected from %s: %s", account.provider, len(imap_messages)
-                )
-            except Exception as exc:  # noqa: BLE001
-                self.logger.warning("IMAP source %s skipped: %s", account.provider, exc)
+            last_exc: Exception | None = None
+            for attempt in range(1, self.settings.imap_retry_attempts + 1):
+                try:
+                    source = ImapEmailSource(account)
+                    imap_messages = source.fetch_messages(
+                        keywords=self.settings.email_keywords,
+                        since=since,
+                        max_messages=max_messages,
+                    )
+                    messages.extend(imap_messages)
+                    self.logger.info(
+                        "IMAP messages collected from %s: %s", account.provider, len(imap_messages)
+                    )
+                    last_exc = None
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    last_exc = exc
+                    self.logger.warning(
+                        "IMAP source %s attempt %s/%s failed: %s",
+                        account.provider,
+                        attempt,
+                        self.settings.imap_retry_attempts,
+                        exc,
+                    )
+                    if attempt < self.settings.imap_retry_attempts:
+                        time.sleep(self.settings.imap_retry_delay_sec)
+            if last_exc is not None:
+                self.logger.warning("IMAP source %s skipped: %s", account.provider, last_exc)
 
         return messages
 
@@ -101,6 +121,7 @@ class SyncService:
         since: datetime | None,
         media_download: bool,
         correlation_id: str,
+        max_messages: int,
     ) -> dict[str, Any]:
         started_at = datetime.now(timezone.utc)
         self.repository.start_sync_run(correlation_id=correlation_id, source=source, started_at=started_at.isoformat())
@@ -115,7 +136,7 @@ class SyncService:
         }
 
         try:
-            messages = self._collect_email_messages(since=since)
+            messages = self._collect_email_messages(since=since, max_messages=max_messages)
             stats["messages_total"] = len(messages)
             store_filter = self._store_filter(source)
 
@@ -274,6 +295,8 @@ class SyncService:
                                             item_id=item_id,
                                             url=media_url,
                                             source=f"{message.source}:link",
+                                            timeout_sec=self.settings.media_timeout_sec,
+                                            max_retries=self.settings.media_retries,
                                         )
                                         stats["media_saved"] += 1
                                     except Exception as exc:  # noqa: BLE001

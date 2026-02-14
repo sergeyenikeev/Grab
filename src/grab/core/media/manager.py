@@ -3,6 +3,7 @@
 import hashlib
 import json
 import mimetypes
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -131,25 +132,39 @@ class MediaManager:
         source: str,
         timeout_sec: int = 30,
         max_bytes: int = 50_000_000,
+        max_retries: int = 2,
     ) -> str | None:
-        response = requests.get(url, timeout=timeout_sec)
-        response.raise_for_status()
+        last_exc: Exception | None = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = requests.get(url, timeout=timeout_sec)
+                response.raise_for_status()
 
-        content = response.content
-        if len(content) > max_bytes:
-            raise ValueError(f"Слишком большой медиа-файл: {len(content)} bytes")
+                content = response.content
+                if len(content) > max_bytes:
+                    raise ValueError(f"Слишком большой медиа-файл: {len(content)} bytes")
 
-        parsed = urlparse(url)
-        filename = Path(parsed.path).name or None
-        mime = response.headers.get("Content-Type")
+                parsed = urlparse(url)
+                filename = Path(parsed.path).name or None
+                mime = response.headers.get("Content-Type")
 
-        return self.save_bytes(
-            store_code=store_code,
-            order_ref=order_ref,
-            item_id=item_id,
-            filename=filename,
-            content=content,
-            mime=mime,
-            source_url=url,
-            source=source,
-        )
+                return self.save_bytes(
+                    store_code=store_code,
+                    order_ref=order_ref,
+                    item_id=item_id,
+                    filename=filename,
+                    content=content,
+                    mime=mime,
+                    source_url=url,
+                    source=source,
+                )
+            except requests.RequestException as exc:
+                last_exc = exc
+                if attempt < max_retries:
+                    time.sleep(1 + attempt)
+                else:
+                    break
+
+        if last_exc:
+            raise last_exc
+        return None

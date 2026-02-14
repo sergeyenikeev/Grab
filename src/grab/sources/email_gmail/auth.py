@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import json
 from pathlib import Path
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -17,7 +18,11 @@ class GmailAuthManager:
 
         creds = None
         if self.token_path.exists():
-            creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
+            try:
+                creds = Credentials.from_authorized_user_file(str(self.token_path), SCOPES)
+            except Exception:  # noqa: BLE001
+                # Поврежденный токен лучше пересоздать
+                creds = None
 
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
@@ -27,7 +32,15 @@ class GmailAuthManager:
                 raise FileNotFoundError(
                     f"Не найден OAuth client secret: {self.client_secret_path}"
                 )
-            flow = InstalledAppFlow.from_client_secrets_file(str(self.client_secret_path), SCOPES)
+            try:
+                with self.client_secret_path.open("r", encoding="utf-8-sig") as fh:
+                    client_config = json.load(fh)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    "Невалидный OAuth JSON. Пересохраните файл без BOM или скачайте заново."
+                ) from exc
+
+            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
             creds = flow.run_local_server(port=0)
 
         self.token_path.parent.mkdir(parents=True, exist_ok=True)

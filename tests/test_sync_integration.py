@@ -26,13 +26,14 @@ def test_sync_service_idempotent_on_duplicate_message(settings, repository, test
         raw_payload={"fixture": True},
     )
 
-    service._collect_email_messages = lambda since=None: [message, message]  # noqa: SLF001,E731
+    service._collect_email_messages = lambda since=None, max_messages=200: [message, message]  # noqa: SLF001,E731
 
     stats = service.sync(
         source="email",
         since=None,
         media_download=False,
         correlation_id="sync-test-1",
+        max_messages=200,
     )
 
     assert stats["messages_total"] == 2

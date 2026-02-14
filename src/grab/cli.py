@@ -1,6 +1,8 @@
 ﻿from __future__ import annotations
 
+import json
 import subprocess
+import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +31,8 @@ SOURCE_VALUES = [
     "megamarket",
     "dns",
     "auchan",
+    "aliexpress",
+    "ali",
 ]
 
 
@@ -67,11 +71,20 @@ def auth_command(
 
     if gmail:
         try:
+            if not settings.gmail_client_secret_path.exists():
+                raise FileNotFoundError(f"Нет файла Gmail client secret: {settings.gmail_client_secret_path}")
+            # Быстрая проверка, что JSON валиден (учитываем BOM)
+            with settings.gmail_client_secret_path.open("r", encoding="utf-8-sig") as fh:
+                json.load(fh)
+
             manager = GmailAuthManager(settings.gmail_client_secret_path, settings.gmail_token_path)
             manager.ensure_credentials()
             print(f"[green]Gmail OAuth OK[/green]: {settings.gmail_token_path}")
         except Exception as exc:  # noqa: BLE001
-            print(f"[red]Gmail OAuth ошибка[/red]: {exc}")
+            print(
+                "[red]Gmail OAuth ошибка[/red]: "
+                f"{exc.__class__.__name__}: {exc} (secret: {settings.gmail_client_secret_path})"
+            )
 
     if imap:
         if not settings.imap_accounts:
@@ -79,9 +92,13 @@ def auth_command(
         for account in settings.imap_accounts:
             try:
                 ImapEmailSource(account).check_connection()
-                print(f"[green]IMAP OK[/green]: {account.provider} ({account.username})")
+                print(f"[green]IMAP OK[/green]: {account.provider} ({account.username}@{account.host}:{account.port})")
             except Exception as exc:  # noqa: BLE001
-                print(f"[red]IMAP ошибка[/red] {account.provider}: {exc}")
+                print(
+                    "[red]IMAP ошибка[/red] "
+                    f"{account.provider} ({account.username}@{account.host}:{account.port}): "
+                    f"{exc.__class__.__name__}: {exc}"
+                )
 
 
 @app.command("sync")
@@ -89,6 +106,10 @@ def sync_command(
     source: str = typer.Option("all", help=f"Источник: {', '.join(SOURCE_VALUES)}"),
     since: str | None = typer.Option(None, help="Дата/время с которой брать данные"),
     media: str = typer.Option("download", help="download|skip"),
+    max_messages: int | None = typer.Option(
+        None,
+        help="Макс. писем на источник за один запуск (по умолчанию из GRAB_EMAIL_MAX_MESSAGES)",
+    ),
 ) -> None:
     if source not in SOURCE_VALUES:
         raise typer.BadParameter(f"Недопустимый source: {source}")
@@ -99,6 +120,7 @@ def sync_command(
     correlation_id = uuid.uuid4().hex
 
     settings = _load_settings()
+    max_messages_value = max_messages if max_messages is not None else settings.email_max_messages
     configure_logging(settings.logs_dir, correlation_id=correlation_id)
     logger = get_logger("grab.sync", correlation_id)
 
@@ -110,6 +132,7 @@ def sync_command(
             since=since_dt,
             media_download=media == "download",
             correlation_id=correlation_id,
+            max_messages=max_messages_value,
         )
 
     print(f"[green]Sync завершен[/green]. correlation_id={correlation_id}")
@@ -165,7 +188,7 @@ def dedupe_command() -> None:
 
 @app.command("tests")
 def tests_command() -> None:
-    result = subprocess.run(["pytest", "-q"], check=False)
+    result = subprocess.run([sys.executable, "-m", "pytest", "-q"], check=False)
     if result.returncode != 0:
         raise typer.Exit(result.returncode)
     print("[green]Тесты прошли успешно[/green]")

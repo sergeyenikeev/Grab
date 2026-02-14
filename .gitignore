@@ -13,6 +13,8 @@ venv/
 
 # Environment
 .env
+secrets/*.json
+!secrets/*.example.json
 
 # Data / runtime artifacts
 data/

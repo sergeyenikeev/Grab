@@ -28,6 +28,10 @@ STORE_MAP = {
     "мегамаркет": ("megamarket", "Мегамаркет"),
     "dns": ("dns", "DNS"),
     "ашан": ("auchan", "Ашан"),
+    "aliexpress": ("aliexpress", "AliExpress"),
+    "ali express": ("aliexpress", "AliExpress"),
+    "алиэкспресс": ("aliexpress", "AliExpress"),
+    "aliexpress.com": ("aliexpress", "AliExpress"),
 }
 
 
