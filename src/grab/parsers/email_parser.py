@@ -6,11 +6,13 @@ from datetime import datetime
 from grab.core.normalize import NormalizedAttribute, NormalizedItem, NormalizedOrder
 from grab.sources.models import EmailMessageData
 
+from .aliexpress_parser import parse_aliexpress_message
 from .utils import filter_media_links
 
 ORDER_ID_PATTERNS = [
     re.compile(r"(?:заказ|order|№)\s*[#:№-]*\s*([A-Za-zА-Яа-я0-9-]{5,})", re.IGNORECASE),
     re.compile(r"номер\s*заказа\s*[:№-]*\s*([A-Za-zА-Яа-я0-9-]{5,})", re.IGNORECASE),
+    re.compile(r"(?:order\s*id|order\s*no\.?)\s*[:#№-]*\s*([A-Za-z0-9-]{5,})", re.IGNORECASE),
 ]
 PRICE_PATTERN = re.compile(r"(\d[\d\s.,]*)\s*(?:₽|руб|RUB)", re.IGNORECASE)
 ITEM_LINE_PATTERN = re.compile(
@@ -148,6 +150,11 @@ def parse_email_to_orders(message: EmailMessageData) -> list[NormalizedOrder]:
         return []
 
     store_code, store_name = _detect_store(message)
+
+    if store_code == "aliexpress":
+        aliexpress_order = parse_aliexpress_message(message)
+        return [aliexpress_order] if aliexpress_order else []
+
     external_order_id = _extract_order_id(text_blob)
     total_amount = _extract_total_amount(text_blob)
     currency = _guess_currency(text_blob)

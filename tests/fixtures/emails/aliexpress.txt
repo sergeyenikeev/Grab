@@ -1,0 +1,5 @@
+﻿Order ID: 1234567890
+You paid: US $19.99
+Items:
+- USB Cable FastCharge, 1 pcs, US $3.99
+- Charger 20W, 1 pcs, US $15.99

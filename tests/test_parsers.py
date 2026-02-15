@@ -20,6 +20,12 @@ from grab.sources.models import EmailMessageData
             "market@yandex.ru",
             "yamarket",
         ),
+        (
+            "aliexpress.txt",
+            "AliExpress: Order ID 1234567890",
+            "notice@aliexpress.com",
+            "aliexpress",
+        ),
     ],
 )
 def test_email_parser_detects_store_and_items(
